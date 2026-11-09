@@ -2,13 +2,9 @@
 
 ## Mochila Binária (0-1 Knapsack)
 
-> **Documento parcial.** Ele segue a estrutura do PDF final (seções 1 a 8), mas as seções 4, 5 e 6 cobrem apenas **Divisão e Conquista (D&C)** e **Programação Dinâmica (PD)**. As demais estratégias entram na integração. Trechos entre `< >` devem ser preenchidos.
-
 ---
 
 ## 1. Autores
-
-*(Ordenar alfabeticamente na versão final.)*
 
 | Nome completo | Matrícula | Estratégias |
 |---|---|---|
