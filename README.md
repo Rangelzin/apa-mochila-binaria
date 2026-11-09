@@ -13,8 +13,6 @@ apa-mochila/
 │   ├── mochila.cpp              # leitura, gerador aleatório, verificador de certificado
 │   ├── divisao_conquista.cpp
 │   └── programacao_dinamica.cpp
-├── tests/
-│   └── testes.cpp               # bordas + comparação com força bruta
 ├── data/
 │   └── exemplo.txt              # instância de exemplo
 ├── scripts/
@@ -40,7 +38,6 @@ Abra a pasta no VS Code e use `Ctrl+Shift+P` → **Tasks: Run Task**:
 |---|---|
 | `Compilar` (`Ctrl+Shift+B`) | gera `build/mochila.exe` |
 | `Rodar exemplo` | resolve `data/exemplo.txt` com todas as estratégias |
-| `Rodar testes` | compila e roda `tests/testes.cpp` |
 | `Benchmark + gráficos` | gera `results/resultados.csv` e os PNGs em `docs/img/` (~20 s) |
 
 ### Windows: PowerShell
@@ -48,9 +45,6 @@ Abra a pasta no VS Code e use `Ctrl+Shift+P` → **Tasks: Run Task**:
 ```powershell
 g++ -std=c++17 -O2 -Wall -Wextra -Iinclude src/main.cpp src/mochila.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp -o build/mochila.exe
 .\build\mochila.exe data\exemplo.txt
-
-g++ -std=c++17 -O2 -Iinclude tests/testes.cpp src/mochila.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp -o build/testes.exe
-.\build\testes.exe
 
 .\build\mochila.exe --benchmark results\resultados.csv
 python scripts\graficos.py results\resultados.csv docs\img
@@ -60,11 +54,8 @@ python scripts\graficos.py results\resultados.csv docs\img
 
 ```bash
 make run         # compila e resolve data/exemplo.txt
-make test        # testes (com AddressSanitizer + UBSan)
 make benchmark   # CSV + gráficos
 ```
-
-No Git Bash com MinGW, rode os testes com `make test SAN=` (o MinGW não tem sanitizers).
 
 ## Formato da instância
 
@@ -83,8 +74,6 @@ Exemplo (`data/exemplo.txt`): 4 itens, capacidade 7, alvo 9 → resposta SIM com
 2. Implemente-a em `src/xxx.cpp`, incrementando `resultado.operacoes` na operação barômetro.
 3. Registre-a em `estrategias()` no `src/main.cpp`. O benchmark passa a medi-la e a comparar o resultado dela com as outras.
 4. Acrescente o arquivo às listas `NUCLEO` (Makefile) e `args` (`.vscode/tasks.json`).
-5. Adicione a chamada em `verificarTodas()` no `tests/testes.cpp`.
-
 As estratégias exponenciais (força bruta e backtracking) não vão aguentar o benchmark atual (n até 1024). Para elas, convém um experimento separado, com n pequeno.
 
 ## Gerar o PDF

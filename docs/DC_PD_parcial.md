@@ -144,7 +144,6 @@ Assim, $\text{SOMA-SUBCONJ} \le_p \text{MOCHILA-01}$, e o problema é NP-difíci
 | `src/divisao_conquista.cpp` | Estratégia D&C |
 | `src/programacao_dinamica.cpp` | Estratégia PD (tabela completa e vetor único) |
 | `src/main.cpp` | Execução de uma instância e benchmark (tempo + contagem de operações) |
-| `tests/testes.cpp` | Casos de borda e comparação com oráculo de força bruta em 300 instâncias aleatórias |
 | `scripts/graficos.py` | Geração dos gráficos a partir do CSV do benchmark |
 
 Linguagem: C++17, compilado com `g++ -O2`. Formato de entrada:
@@ -312,17 +311,6 @@ Resultado resolverProgramacaoDinamicaVetor(const Instancia& instancia) {
 
 A tabela é guardada em um `std::vector` contíguo, indexado por `i * (C+1) + c`, para manter a localidade de cache no laço interno.
 
-### 4.4 Validação
-
-`tests/testes.cpp` (compilado com AddressSanitizer e UBSan no Linux) verifica:
-
-1. Casos de borda: $n = 0$, $C = 0$, item que não cabe, item que cabe exatamente e item de peso zero.
-2. Que as três implementações dão o mesmo $\mathrm{OPT}$ que um oráculo de força bruta $O(2^n \cdot n)$ em 300 instâncias aleatórias com $n \leq 12$.
-3. Que todo certificado devolvido pela PD passa no verificador polinomial `verificarCertificado`.
-4. Que a contagem de operações coincide com as fórmulas fechadas da Seção 5.
-
-Além disso, o benchmark aborta se as estratégias divergirem em qualquer instância.
-
 ---
 
 ## 5. Análise de Complexidade
@@ -473,7 +461,7 @@ A contagem de operações prevê o crescimento, mas não o custo de cada operaç
 ### 7.2 Dificuldades encontradas
 
 - **Formular uma D&C que não fosse a força bruta.** A recursão "leva ou não leva o item $i$" divide o problema, mas gera $2^n$ chamadas e coincide com a força bruta. A solução foi dividir o *conjunto de itens* e combinar os perfis $f_X(c)$ por convolução $(\max,+)$, o que exigiu provar que a combinação é correta (Seção 4.2).
-- **Manter a restrição "0-1" na PD com vetor único.** Percorrer $c$ em ordem crescente reaproveita o item na mesma iteração e resolve, sem querer, a mochila *ilimitada*. A ordem decrescente corrige isso, e a correção foi validada contra o oráculo de força bruta.
+- **Manter a restrição "0-1" na PD com vetor único.** Percorrer $c$ em ordem crescente reaproveita o item na mesma iteração e resolve, sem querer, a mochila *ilimitada*. A ordem decrescente corrige isso.
 - **Medir tempos muito pequenos.** As execuções da PD duram frações de milissegundo e oscilam entre execuções. A solução foi usar `steady_clock`, reportar a mediana de 5 repetições e manter a contagem de operações como métrica independente da máquina.
 - **Adaptação ao C++.** O grupo escolheu C++ para aprender uma linguagem nova, e alguns detalhes da linguagem exigiram cuidado. O primeiro foram os tipos sem sinal em laços decrescentes: com `std::size_t`, o laço `for (c = C; c >= p; --c)` nunca termina quando $p = 0$, e isso foi resolvido com o idioma `c-- > p`. Também foi preciso evitar estouro de inteiros (os valores usam `int64_t`) e organizar um cabeçalho comum para integrar as estratégias.
 
