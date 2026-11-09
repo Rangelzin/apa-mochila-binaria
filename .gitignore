@@ -1,0 +1,12 @@
+# Binários (o build/ fica no repo só com o .gitkeep)
+build/*
+!build/.gitkeep
+*.exe
+*.o
+*.obj
+
+# Python
+__pycache__/
+
+# PDF gerado a partir do docs/*.md
+docs/*.pdf

@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Compilar",
+      "type": "process",
+      "command": "g++",
+      "args": [
+        "-std=c++17", "-O2", "-Wall", "-Wextra", "-Wpedantic", "-Wshadow", "-Wconversion", "-Wsign-conversion",
+        "-Iinclude",
+        "src/main.cpp", "src/mochila.cpp", "src/divisao_conquista.cpp", "src/programacao_dinamica.cpp",
+        "-o", "build/mochila"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$gcc"],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Compilar testes",
+      "type": "process",
+      "command": "g++",
+      "args": [
+        "-std=c++17", "-O2", "-Wall", "-Wextra",
+        "-Iinclude",
+        "tests/testes.cpp", "src/mochila.cpp", "src/divisao_conquista.cpp", "src/programacao_dinamica.cpp",
+        "-o", "build/testes"
+      ],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": ["$gcc"]
+    },
+    {
+      "label": "Rodar exemplo",
+      "type": "shell",
+      "command": "./build/mochila data/exemplo.txt",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "Compilar",
+      "problemMatcher": []
+    },
+    {
+      "label": "Rodar testes",
+      "type": "shell",
+      "command": "./build/testes",
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "Compilar testes",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Benchmark + gráficos",
+      "type": "shell",
+      "command": "./build/mochila --benchmark results/resultados.csv; python3 scripts/graficos.py results/resultados.csv docs/img",
+      "windows": {
+        "command": "./build/mochila --benchmark results/resultados.csv; python scripts/graficos.py results/resultados.csv docs/img"
+      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "dependsOn": "Compilar",
+      "problemMatcher": []
+    }
+  ]
+}
