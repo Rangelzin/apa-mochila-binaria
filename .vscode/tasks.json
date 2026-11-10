@@ -9,6 +9,7 @@
         "-std=c++17", "-O2", "-Wall", "-Wextra", "-Wpedantic", "-Wshadow", "-Wconversion", "-Wsign-conversion",
         "-Iinclude",
         "src/main.cpp", "src/mochila.cpp", "src/divisao_conquista.cpp", "src/programacao_dinamica.cpp",
+        "src/guloso.cpp", "src/aproximado.cpp",
         "-o", "build/mochila"
       ],
       "options": { "cwd": "${workspaceFolder}" },
@@ -26,9 +27,9 @@
     {
       "label": "Benchmark + gráficos",
       "type": "shell",
-      "command": "./build/mochila --benchmark results/resultados.csv; python3 scripts/graficos.py results/resultados.csv docs/img",
+      "command": "./build/mochila --benchmark results/resultados.csv; ./build/mochila --qualidade results/qualidade.csv; python3 scripts/graficos.py results/resultados.csv docs/img results/qualidade.csv",
       "windows": {
-        "command": "./build/mochila --benchmark results/resultados.csv; python scripts/graficos.py results/resultados.csv docs/img"
+        "command": "./build/mochila --benchmark results/resultados.csv; ./build/mochila --qualidade results/qualidade.csv; python scripts/graficos.py results/resultados.csv docs/img results/qualidade.csv"
       },
       "options": { "cwd": "${workspaceFolder}" },
       "dependsOn": "Compilar",

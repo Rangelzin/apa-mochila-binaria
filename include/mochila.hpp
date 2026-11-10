@@ -80,6 +80,19 @@ Resultado resolverProgramacaoDinamica(const Instancia& instancia);
 /** @brief Programação dinâmica com vetor único. Tempo O(n·C), espaço Θ(C); não reconstrói solução. */
 Resultado resolverProgramacaoDinamicaVetor(const Instancia& instancia);
 
+/**
+ * @brief Heurística gulosa: ordena por valor/peso decrescente e leva cada item que ainda cabe.
+ * Tempo Θ(n log n), espaço Θ(n). Sem garantia de qualidade: a razão com o ótimo pode ser
+ * arbitrariamente pequena (ver data/guloso_ruim.txt).
+ */
+Resultado resolverGuloso(const Instancia& instancia);
+
+/**
+ * @brief 2-aproximação: o melhor entre a solução gulosa e o item mais valioso que cabe sozinho.
+ * Tempo Θ(n log n). Garante melhorValor ≥ OPT/2.
+ */
+Resultado resolverAproximado(const Instancia& instancia);
+
 }  // namespace mochila
 
 #endif  // MOCHILA_HPP
