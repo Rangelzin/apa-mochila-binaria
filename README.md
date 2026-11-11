@@ -33,12 +33,15 @@ apa-mochila/
 │   ├── Documentação-Trabalho.md  # documentação (vira o PDF de entrega)
 │   └── img/                     # gráficos usados no .md
 ├── build/                       # executáveis (ignorado pelo git)
-└── Makefile
+├── Makefile
+└── Trabalho_Final_APA_Mochila_Binaria.pdf   # documentação de entrega
 ```
 
 ## Como rodar
 
 ### Windows: VS Code (mais fácil)
+
+*(As tasks ficam em `.vscode/tasks.json`, que está no repositório mas não no zip de entrega. Sem elas, use os comandos do PowerShell abaixo.)*
 
 Requisitos: MinGW-w64 (`g++` no PATH) e, para os gráficos, Python com `pip install matplotlib`.
 
@@ -99,5 +102,5 @@ Requer [pandoc](https://pandoc.org) e uma distribuição LaTeX (MiKTeX no Window
 
 ```bash
 cd docs
-pandoc Documentação-Trabalho_parcial.md -o trabalho.pdf --pdf-engine=xelatex -V geometry:margin=2.5cm -V lang=pt-BR
+pandoc Documentação-Trabalho.md -o ../Trabalho_Final_APA_Mochila_Binaria.pdf --pdf-engine=xelatex -V geometry:margin=2.2cm -V fontsize=10pt -V mainfont="DejaVu Serif" -V monofont="DejaVu Sans Mono"
 ```
