@@ -491,7 +491,7 @@ LIMITE(k, restante):                   ótimo fracionário dos itens k..n
 9   limite ← 0
 10  para j de k até n:
 11      se p_j ≤ restante: restante ← restante - p_j; limite ← limite + v_j
-12      senão: limite ← limite + ⌈restante · v_j / p_j⌉; interrompe
+12      senão: limite ← limite + teto(restante * v_j / p_j); interrompe
 13  devolve limite
 ```
 
