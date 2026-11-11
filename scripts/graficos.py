@@ -1,9 +1,13 @@
 """Gera os gráficos a partir dos CSVs do benchmark e do experimento de qualidade.
 
 Uso: python scripts/graficos.py [results/resultados.csv] [docs/img] [results/qualidade.csv]
+                                [results/exponencial.csv]
 
-- resultados.csv -> grafico_varia_n.png, grafico_varia_C.png (tempo)
-- qualidade.csv  -> grafico_qualidade.png (valor heurístico / ótimo); pulado se o arquivo não existir
+- resultados.csv  -> grafico_varia_n.png, grafico_varia_C.png (tempo)
+- qualidade.csv   -> grafico_qualidade.png (valor heurístico / ótimo)
+- exponencial.csv -> grafico_exponencial.png (tempo em n pequeno, com força bruta)
+
+Os dois últimos são pulados se o arquivo não existir.
 """
 import csv
 import sys
@@ -16,6 +20,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ROTULOS = {
+    "forca_bruta": "Força Bruta",
+    "backtracking": "Backtracking",
     "divisao_conquista": "Divisão e Conquista",
     "pd_tabela": "PD (tabela)",
     "pd_vetor": "PD (vetor)",
@@ -29,12 +35,12 @@ def carregar(caminho):
     series = defaultdict(lambda: defaultdict(list))
     with open(caminho, newline="") as arquivo:
         for linha in csv.DictReader(arquivo):
-            eixo = int(linha["n"]) if linha["experimento"] == "varia_n" else int(linha["C"])
+            eixo = int(linha["C"]) if linha["experimento"] == "varia_C" else int(linha["n"])
             series[linha["experimento"]][linha["estrategia"]].append((eixo, float(linha["tempo_ms"])))
     return series
 
 
-def plotar(series, experimento, rotulo_x, saida):
+def plotar(series, experimento, rotulo_x, saida, repeticoes=5):
     fig, ax = plt.subplots(figsize=(7.5, 4))
     for estrategia, pontos in series[experimento].items():
         xs, ys = zip(*sorted(pontos))
@@ -42,7 +48,7 @@ def plotar(series, experimento, rotulo_x, saida):
     ax.set_xscale("log", base=2)
     ax.set_yscale("log")
     ax.set_xlabel(rotulo_x)
-    ax.set_ylabel("tempo (ms, mediana de 5)")
+    ax.set_ylabel(f"tempo (ms, mediana de {repeticoes})")
     ax.grid(True, which="both", alpha=0.3)
     ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1), fontsize=9)
     fig.tight_layout()
@@ -84,9 +90,12 @@ if __name__ == "__main__":
     entrada = sys.argv[1] if len(sys.argv) > 1 else "results/resultados.csv"
     saida = Path(sys.argv[2] if len(sys.argv) > 2 else "docs/img")
     qualidade = Path(sys.argv[3] if len(sys.argv) > 3 else "results/qualidade.csv")
+    exponencial = Path(sys.argv[4] if len(sys.argv) > 4 else "results/exponencial.csv")
     saida.mkdir(parents=True, exist_ok=True)
     dados = carregar(entrada)
     plotar(dados, "varia_n", "n (C = 1000)", saida / "grafico_varia_n.png")
     plotar(dados, "varia_C", "C (n = 100)", saida / "grafico_varia_C.png")
     if qualidade.exists():
         plotar_qualidade(qualidade, saida / "grafico_qualidade.png")
+    if exponencial.exists():
+        plotar(carregar(exponencial), "exponencial", "n (C = 1000)", saida / "grafico_exponencial.png", 3)

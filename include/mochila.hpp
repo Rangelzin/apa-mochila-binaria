@@ -71,6 +71,21 @@ Instancia gerarInstancia(int n, int capacidade, unsigned semente);
  */
 bool verificarCertificado(const Instancia& instancia, const std::vector<int>& selecionados);
 
+/**
+ * @brief Força bruta: enumera os 2^n subconjuntos e avalia cada um em Θ(n), sem poda.
+ * Tempo Θ(n·2^n), espaço Θ(n). Total exato de operações: n·2^n, independente dos dados.
+ * @pre n ≤ 63 (o subconjunto é uma máscara de bits de 64 bits).
+ * @throws std::domain_error se n > 63.
+ */
+Resultado resolverForcaBruta(const Instancia& instancia);
+
+/**
+ * @brief Backtracking na árvore de decisão leva/não leva, com poda por inviabilidade e por
+ * limite superior (relaxação fracionária). Tempo O(n·2^n) no pior caso, espaço Θ(n);
+ * a contagem efetiva depende dos dados e fica muito abaixo do pior caso na prática.
+ */
+Resultado resolverBacktracking(const Instancia& instancia);
+
 /** @brief Divisão e conquista sobre o conjunto de itens. Tempo Θ(n·C²), espaço Θ(C·log n). */
 Resultado resolverDivisaoConquista(const Instancia& instancia);
 

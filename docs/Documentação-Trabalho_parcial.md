@@ -141,11 +141,13 @@ Assim, $\text{SOMA-SUBCONJ} \le_p \text{MOCHILA-01}$, e o problema é NP-difíci
 |---|---|
 | `include/mochila.hpp` | Tipos (`Item`, `Instancia`, `Resultado`) e contratos de todas as estratégias |
 | `src/mochila.cpp` | Leitura de instância, gerador aleatório reprodutível, verificador de certificado |
+| `src/forca_bruta.cpp` | Enumeração dos $2^n$ subconjuntos, sem poda |
+| `src/backtracking.cpp` | Busca na mesma árvore, com poda por inviabilidade e por limite superior |
 | `src/divisao_conquista.cpp` | Estratégia D&C |
 | `src/programacao_dinamica.cpp` | Estratégia PD (tabela completa e vetor único) |
 | `src/guloso.cpp` | Heurística gulosa por densidade $v_i/p_i$ |
 | `src/aproximado.cpp` | Algoritmo 2-aproximado (guloso modificado) |
-| `src/main.cpp` | Execução de uma instância, benchmark (tempo + contagem de operações) e experimento de qualidade das heurísticas |
+| `src/main.cpp` | Execução de uma instância, benchmark (tempo + contagem de operações), experimento de qualidade das heurísticas e experimento das estratégias exponenciais |
 | `scripts/graficos.py` | Geração dos gráficos a partir dos CSVs |
 
 Linguagem: C++17, compilado com `g++ -O2`. Formato de entrada:
@@ -421,7 +423,109 @@ $$\mathrm{OPT} \;\le\; \mathrm{guloso} + v_j \;\le\; 2 \max(\mathrm{guloso},\ v_
 
 **A garantia é justa.** Na instância `data/aproximado_justo.txt`, com $C = 100$, os itens são $(1, 2)$, $(50, 50)$ e $(50, 50)$. O guloso leva o item de densidade 2 e um dos itens de peso 50, totalizando 52. O melhor item sozinho vale 50, então $A = 52$. O ótimo leva os dois itens de peso 50 e vale 100. Generalizando para $C$ par, com itens $(1, 2)$, $(C/2, C/2)$ e $(C/2, C/2)$, obtém-se $A = C/2 + 2$ e $\mathrm{OPT} = C$, e a razão tende a $1/2$. Nenhuma análise melhor que $1/2$ vale para este algoritmo.
 
-### 4.6 Heurísticas e a versão de decisão
+### 4.6 Força Bruta
+
+A definição do problema já descreve um algoritmo: testar todo $S \subseteq \{1,\dots,n\}$. Como $S$ equivale a um vetor $x \in \{0,1\}^n$, cada subconjunto é uma máscara de $n$ bits, e percorrer os inteiros de $0$ a $2^n - 1$ percorre todos os subconjuntos exatamente uma vez.
+
+```
+FORCA_BRUTA(I):
+1  melhor ← 0; melhorMascara ← 0
+2  para mascara de 0 até 2^n - 1:
+3      peso ← 0; valor ← 0
+4      para i de 1 até n:
+5          se o bit i de mascara está ligado: peso ← peso + p_i; valor ← valor + v_i
+6      se peso ≤ C e valor > melhor: melhor ← valor; melhorMascara ← mascara
+7  devolve melhor e os itens de melhorMascara
+```
+
+```cpp
+const std::uint64_t candidatos = bit(n);  // 2^n máscaras, de 0 a 2^n - 1
+std::uint64_t melhorMascara = 0;
+
+for (std::uint64_t mascara = 0; mascara < candidatos; ++mascara) {
+    long long peso = 0;
+    Valor valor = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        ++resultado.operacoes;
+        if (mascara & bit(i)) {
+            peso += itens[i].peso;
+            valor += itens[i].valor;
+        }
+    }
+    if (peso <= instancia.capacidade && valor > resultado.melhorValor) {
+        resultado.melhorValor = valor;
+        melhorMascara = mascara;
+    }
+}
+```
+
+**Corretude.** O laço da linha 2 gera todos os $2^n$ subconjuntos, a linha 6 descarta os inviáveis e guarda o de maior valor entre os viáveis. Por definição, o máximo sobre todas as soluções viáveis é $\mathrm{OPT}(I)$.
+
+**Ausência de poda é proposital.** A estratégia serve a dois propósitos: ser a referência exata mais simples possível e **medir o tamanho do espaço de busca**. É a única estratégia do trabalho cujo custo não depende dos dados — duas instâncias com o mesmo $n$ custam exatamente o mesmo, qualquer que seja $C$ ou os valores. Podar essa mesma árvore é o que faz a Seção 4.7, e comparar as duas contagens mede o quanto a poda economiza.
+
+**Limites de uso.** A máscara é um inteiro de 64 bits, o que restringe a estratégia a $n \le 63$; acima disso ela lança exceção. Na prática o limite é o tempo: o driver a pula acima de $n = 24$ (campo `maxN` do registro de estratégias), ponto em que ela já executa $402$ milhões de operações e leva cerca de 1 s (Seção 6.7).
+
+### 4.7 Backtracking
+
+O backtracking percorre a **mesma árvore de decisão** da força bruta — no nível $k$ decide-se levar ou não o $k$-ésimo item —, mas em profundidade e cortando todo ramo que comprovadamente não melhora a melhor solução já encontrada. São duas podas:
+
+1. **Inviabilidade:** o ramo "leva" só é gerado se $p_k \le$ capacidade restante.
+2. **Limite superior:** calcula-se o ótimo da mochila **fracionária** dos itens ainda não decididos. Se o valor acumulado somado a esse limite não supera a melhor solução já encontrada, o ramo inteiro é abandonado.
+
+Os itens são pré-ordenados por densidade $v/p$ decrescente, pelo mesmo critério e com o mesmo produto cruzado do guloso (Seção 4.4). A ordenação serve a duas coisas: o ótimo fracionário dos itens restantes é obtido de forma gulosa nessa ordem [1, seç. 16.2], e as soluções boas aparecem no começo da busca, o que eleva `melhor` rápido e torna a poda 2 agressiva desde os primeiros níveis. Pelo mesmo motivo, o ramo "leva" é explorado antes do ramo "não leva".
+
+```
+BACKTRACKING(I):
+1  ordena os itens por v/p decrescente
+2  melhor ← 0; EXPLORAR(1, C, 0)
+3  devolve melhor e o caminho guardado
+
+EXPLORAR(k, restante, valor):
+4  se valor > melhor: melhor ← valor; guarda o caminho atual
+5  se k > n: retorna
+6  se valor + LIMITE(k, restante) ≤ melhor: retorna                 (poda 2)
+7  se p_k ≤ restante: EXPLORAR(k+1, restante - p_k, valor + v_k)    (poda 1)
+8  EXPLORAR(k+1, restante, valor)
+
+LIMITE(k, restante):                   ótimo fracionário dos itens k..n
+9   limite ← 0
+10  para j de k até n:
+11      se p_j ≤ restante: restante ← restante - p_j; limite ← limite + v_j
+12      senão: limite ← limite + ⌈restante · v_j / p_j⌉; interrompe
+13  devolve limite
+```
+
+```cpp
+void explorar(std::size_t k, long long restante, Valor valorAtual) {
+    ++operacoes_;
+    if (valorAtual > melhorValor_) {
+        melhorValor_ = valorAtual;
+        melhorEscolha_ = atual_;
+    }
+    if (k == ordem_.size()) return;
+    if (valorAtual + limiteSuperior(k, restante) <= melhorValor_) return;  // poda 2
+
+    const Item& item = itens_[paraIndice(ordem_[k])];
+    if (item.peso <= restante) {                                           // poda 1
+        atual_.push_back(ordem_[k]);
+        explorar(k + 1, restante - item.peso, valorAtual + item.valor);
+        atual_.pop_back();
+    }
+    explorar(k + 1, restante, valorAtual);
+}
+```
+
+**Lema (o limite é válido).** Seja $\mathrm{OPT}_k(R)$ o maior valor obtido com os itens $k..n$ e capacidade $R$. Então $\mathrm{LIMITE}(k, R) \ge \mathrm{OPT}_k(R)$.
+
+*Prova.* A mochila fracionária relaxa a restrição $x_i \in \{0,1\}$ para $x_i \in [0,1]$, então toda solução 0-1 continua viável nela e o ótimo fracionário é $\ge \mathrm{OPT}_k(R)$. O procedimento das linhas 9–13 é exatamente o guloso da mochila fracionária, que é ótimo para ela [1, seç. 16.2]. O teto da linha 12 só aumenta o resultado. $\blacksquare$
+
+**Corolário (a poda é segura).** Se $\text{valor} + \mathrm{LIMITE}(k, R) \le \text{melhor}$, nenhuma folha do ramo supera `melhor`, e descartá-lo não altera a resposta. Logo o backtracking devolve o mesmo ótimo da força bruta.
+
+O arredondamento **para cima** na linha 12 não é detalhe de implementação: o ótimo fracionário é racional, e a divisão inteira o truncaria para baixo. Um limite abaixo do real poderia podar justamente o ramo que contém o ótimo, e o algoritmo devolveria um valor menor. O numerador usa 128 bits, como em `guloso.cpp`, para evitar estouro sem recorrer a ponto flutuante.
+
+**A poda não dá garantia.** O ganho depende de o limite ser apertado, o que depende da instância. Em `data/backtracking_ruim.txt`, uma instância no estilo soma de subconjuntos ($v_i = p_i$, pesos todos pares e $C$ igual à metade do peso total mais 1, portanto ímpar — como toda soma de subconjunto é par, nenhum subconjunto preenche a mochila exatamente), o limite fracionário fica sempre quase igual ao valor acumulado mais a capacidade restante, e a poda quase não corta: com $n = 24$ o backtracking visita 6.425.189 nós, contra 50 numa instância aleatória do mesmo tamanho (Seção 6.7).
+
+### 4.8 Heurísticas e a versão de decisão
 
 O driver trata as estratégias exatas e as heurísticas de forma diferente:
 
@@ -529,10 +633,42 @@ O valor medido é sempre exatamente o do guloso mais $n$ (Seção 6.5). **Espaç
 
 O custo adicional em relação ao guloso é desprezível e compra uma garantia de pior caso que o guloso não tem. Ainda assim, $1/2$ é uma garantia fraca. Existem esquemas de aproximação totalmente polinomiais (FPTAS) que obtêm $(1-\varepsilon)\,\mathrm{OPT}$ em tempo $O(n^3/\varepsilon)$, arredondando os valores e aplicando uma PD sobre eles [10, cap. 8]. Eles ficaram fora do escopo deste trabalho.
 
-### 5.8 Resumo
+### 5.8 Força Bruta
+
+**Barômetro:** inspeção de um item dentro de um candidato (o teste de um bit da máscara), na linha 5 do pseudocódigo.
+
+O laço externo executa $2^n$ vezes e o interno, $n$ vezes, sem nenhuma saída antecipada:
+
+$$T(n) = \sum_{\text{mascara}=0}^{2^n-1} n \;=\; n\,2^n \;=\; \Theta(n\,2^n).$$
+
+A fórmula é **exata e independente dos dados**: não há poda, e o laço interno não é interrompido quando o peso já estoura $C$. Isso faz da força bruta a única estratégia cuja contagem pode ser prevista sem olhar a instância, e foi confirmado em todas as medições da Seção 6.7.
+
+O custo **não depende de $C$**, como nas heurísticas, mas pelo motivo oposto: a capacidade só aparece no teste da linha 6, e o espaço de busca é determinado só por $n$. A comparação com a PD é instrutiva. A PD é exponencial no número de *bits* de $C$ e linear em $n$; a força bruta é exponencial em $n$ e indiferente a $C$. Com $C = 1000$ fixo, dobrar $n$ dobra o custo da PD e o eleva ao quadrado na força bruta.
+
+**Espaço:** $\Theta(n)$, apenas para a solução devolvida — é a estratégia exata mais econômica em memória, e a única em que o espaço não cresce com $C$.
+
+**Escala.** Pelo tempo medido na Seção 6.7 (cerca de $4{,}2 \times 10^8$ operações por segundo), $n = 24$ leva $\approx 1$ s e $n = 50$ levaria $50 \cdot 2^{50} \approx 5{,}6 \times 10^{16}$ operações, mais de **4 anos**. É o que a NP-completude (Seção 3.6) significa na prática.
+
+### 5.9 Backtracking
+
+**Barômetro:** um nó visitado, isto é, uma chamada de `EXPLORAR`.
+
+A árvore de decisão completa tem altura $n$ e $2^{n+1} - 1$ nós. As podas só removem nós, então esse é o limite superior da contagem. Cada nó custa $O(n)$ por causa de `LIMITE`, e a ordenação inicial custa $\Theta(n \log n)$:
+
+$$T(n) = O\big(n \log n + n \cdot 2^{n+1}\big) = O(n\,2^n).$$
+
+É a **mesma ordem da força bruta**: a poda corta nós, não a classe de complexidade. Isso não é um defeito da implementação. Um algoritmo exato de tempo polinomial para a mochila 0-1 implicaria $\mathrm{P} = \mathrm{NP}$ (Seção 3.6), então nenhuma poda pode produzir garantia polinomial de pior caso.
+
+A contagem efetiva depende inteiramente dos dados, e a distância entre o pior caso e o caso típico é enorme. Nas instâncias aleatórias do experimento D, com $n = 40$, o backtracking visitou **126 nós**, contra os $2^{41} - 1 \approx 2{,}2 \times 10^{12}$ do pior caso. Em `data/backtracking_ruim.txt`, com $n = 24$, visitou 6.425.189 nós, cerca de **19% da árvore completa** ($2^{25} - 1 \approx 33{,}5$ milhões). A diferença entre os dois regimes é de oito ordens de grandeza para o mesmo algoritmo.
+
+**Espaço:** $\Theta(n)$ — a pilha de recursão tem profundidade no máximo $n+1$, e os vetores do caminho atual, da melhor escolha e da ordem têm $n$ posições.
+
+### 5.10 Resumo
 
 | Estratégia | Tempo | Espaço | Barômetro exato | Certificado | Qualidade |
 |---|---|---|---|---|---|
+| Força Bruta | $\Theta(n2^n)$ | $\Theta(n)$ | $n\,2^n$ | Sim | Ótimo |
+| Backtracking | $O(n2^n)$ | $\Theta(n)$ | depende dos dados; $\le 2^{n+1}-1$ nós | Sim | Ótimo |
 | D&C | $\Theta(nC^2)$ | $\Theta(C\log n)$ | $n(C+1) + (n-1)\frac{(C+1)(C+2)}{2}$ | Não | Ótimo |
 | PD (tabela) | $\Theta(nC)$ | $\Theta(nC)$ | $n(C+1)$ | Sim, em $\Theta(n)$ | Ótimo |
 | PD (vetor) | $O(nC)$ | $\Theta(C)$ | $\sum_i \max(0, C-p_i+1)$ | Não | Ótimo |
@@ -555,6 +691,7 @@ O custo adicional em relação ao guloso é desprezível e compra uma garantia d
 - Experimento C, de qualidade das heurísticas: para cada $n \in \{5, 10, 20, 50, 100, 200, 500, 1000\}$, com $C = 1000$, foram geradas 200 instâncias (sementes 0 a 199) em duas famílias:
   - **aleatória**, igual à dos experimentos A e B;
   - **fortemente correlacionada**, com $v_i = p_i + C/10$. É uma família clássica de instâncias difíceis [9]: as densidades ficam todas próximas de 1, e o critério guloso quase não distingue os itens.
+- Experimento D, das estratégias exponenciais: as mesmas instâncias aleatórias, com $C = 1000$ e $n \in \{4, 8, 12, 16, 20, 22, 24, 28, 32, 36, 40\}$, mediana de 3 execuções. A força bruta só vai até $n = 24$ e o backtracking até $n = 40$, tetos declarados no registro de estratégias. Ambiente: Intel Core i5-13450HX, g++ 15.2, `-O2`, Ubuntu 26.04. Os dados estão em `results/exponencial.csv`.
 - No experimento C, o ótimo de cada instância foi calculado pela PD vetor. Para cada heurística, registrou-se a razão $A/\mathrm{OPT}$ (mínima e média) e a fração de instâncias resolvidas no ótimo. São 3.200 instâncias, e o experimento leva cerca de 0,3 s.
 
 ### 6.2 Experimento A: variando $n$ ($C = 1000$)
@@ -650,6 +787,31 @@ Razão $A/\mathrm{OPT}$ em 200 instâncias por linha (pior caso / média / fraç
 - **A família correlacionada é mais difícil.** As médias são menores, e o ótimo exato é atingido raramente: em no máximo 29% das instâncias, e em menos de 10% a partir de $n = 50$. Na família aleatória, essa fração vai de 28% a 85,5%. Com as densidades quase iguais, a ordem gulosa é pouco informativa, e sobra capacidade sem uso no fim.
 - **Encontrar o ótimo tende a ficar mais raro com $n$ grande**, mesmo com a razão média subindo. A tendência não é monótona: na família aleatória, a fração sobe de 33% ($n = 200$) para 37% ($n = 500$) antes de cair para 28%. O número de soluções quase ótimas cresce, e a heurística fica perto do ótimo sem acertá-lo exatamente.
 
+### 6.7 Experimento D: estratégias exponenciais ($C = 1000$)
+
+| $n$ | Força Bruta (ms) | Força Bruta (ops) | Backtracking (ms) | Backtracking (nós) | PD vetor (ms) | D&C (ms) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 4 | 0,0004 | 64 | 0,0002 | 7 | 0,0006 | 0,78 |
+| 8 | 0,0070 | 2.048 | 0,0004 | 18 | 0,0016 | 1,82 |
+| 12 | 0,1751 | 49.152 | 0,0009 | 38 | 0,0023 | 2,85 |
+| 16 | 3,133 | 1.048.576 | 0,0012 | 23 | 0,0036 | 4,03 |
+| 20 | 57,06 | 20.971.520 | 0,0012 | 31 | 0,0041 | 4,94 |
+| 22 | 232,7 | 92.274.688 | 0,0020 | 33 | 0,0046 | 5,42 |
+| 24 | 967,0 | 402.653.184 | 0,0021 | 50 | 0,0051 | 5,98 |
+| 28 | — | — | 0,0010 | 69 | 0,0059 | 7,06 |
+| 32 | — | — | 0,0013 | 95 | 0,0068 | 8,02 |
+| 36 | — | — | 0,0019 | 105 | 0,0073 | 9,09 |
+| 40 | — | — | 0,0015 | 126 | 0,0082 | 10,17 |
+
+![Tempo das estratégias exponenciais](img/grafico_exponencial.png)
+
+- **A contagem da força bruta bateu com $n\,2^n$ nas sete medições**, até o último dígito, como previsto na Seção 5.8. É a única estratégia do trabalho em que isso vale para qualquer instância, e não só para a família testada.
+- **O crescimento é o esperado.** De $n = 22$ para $n = 24$ a contagem é multiplicada por $4{,}36$ ($= 4 \cdot 24/22$) e o tempo, por $4{,}15$. De $n = 16$ para $n = 20$, a contagem é multiplicada por 20 e o tempo, por 18. Cada item acrescentado praticamente dobra o trabalho, e quatro itens a mais o multiplicam por 20.
+- **A força bruta perde até para a D&C.** A D&C é a pior das estratégias pseudo-polinomiais aqui (Seção 6.2), e ainda assim a ultrapassa entre $n = 16$ e $n = 20$: em $n = 16$ as duas levam cerca de 3 a 4 ms, e em $n = 24$ a força bruta já é $160\times$ mais lenta. Em $n = 24$ a PD vetor é cerca de **190.000 vezes** mais rápida que a força bruta.
+- **O backtracking é outra história.** Com $n = 40$ ele visita 126 nós, enquanto a árvore completa tem $2^{41} - 1 \approx 2{,}2 \times 10^{12}$ enquanto a força bruta levaria mais de um minuto em $n = 30$ e cerca de 50 minutos em $n = 35$. O número de nós cresce **aproximadamente linear em $n$** nessas instâncias, e nem é monótono (23 nós em $n = 16$, 31 em $n = 20$). O limite fracionário é apertado quando os valores são independentes dos pesos: a ordem gulosa encontra uma solução quase ótima no primeiro mergulho, e quase todos os ramos seguintes são cortados na raiz.
+- **Isso é propriedade da família, não do algoritmo.** Na instância `data/backtracking_ruim.txt`, com apenas $n = 24$, o mesmo backtracking visita 6.425.189 nós — 128 mil vezes mais do que os 50 nós da instância aleatória de mesmo tamanho. Ali os valores são iguais aos pesos, e o limite fracionário fica quase sempre colado no valor que o ramo pode atingir, sem conseguir descartá-lo. A medição em instâncias aleatórias, sozinha, levaria à conclusão errada de que o backtracking "resolve" a mochila 0-1.
+- **Tempos de microssegundo.** Como no experimento das heurísticas (Seção 6.5), o tempo do backtracking é pequeno demais para ser confiável — daí as inversões na coluna, como $n = 28$ aparecer mais rápido que $n = 24$. A contagem de nós é a métrica a usar.
+
 ---
 
 ## 7. Conclusão
@@ -665,17 +827,27 @@ Razão $A/\mathrm{OPT}$ em 200 instâncias por linha (pior caso / média / fraç
 1. As duas heurísticas custam $\Theta(n \log n)$, **independentemente de $C$**, e são as únicas estratégias do trabalho polinomiais no tamanho da entrada. Elas continuam aplicáveis justamente onde a PD deixa de servir: com capacidades da ordem de $10^9$ ou com pesos reais.
 2. O preço é a exatidão. O guloso puro não tem garantia nenhuma: a instância da Seção 4.4 o leva a $2/C$ do ótimo. Uma única comparação extra, com o melhor item isolado, já garante $\mathrm{OPT}/2$, e essa garantia não pode ser melhorada para este algoritmo (Seção 4.5). A análise de pior caso mostrou o defeito, e a mesma análise indicou a correção.
 3. Na prática, as duas ficam muito acima do pior caso. Em instâncias aleatórias com $n \ge 100$, obtêm em média mais de 99% do ótimo. A garantia de $1/2$ só se torna relevante com poucos itens ou itens grandes em relação a $C$, e é nesses casos que o aproximado supera o guloso.
-4. Para a versão de decisão, as heurísticas dão respostas parciais. Um SIM vem sempre com certificado válido. O NÃO não é dado pelo guloso, mas o aproximado o certifica quando $2A < V$ (Seção 4.6). Quando a resposta exata é necessária, a combinação natural é usar o aproximado como filtro rápido e recorrer à PD só na faixa $V/2 \le A < V$.
+4. Para a versão de decisão, as heurísticas dão respostas parciais. Um SIM vem sempre com certificado válido. O NÃO não é dado pelo guloso, mas o aproximado o certifica quando $2A < V$ (Seção 4.8). Quando a resposta exata é necessária, a combinação natural é usar o aproximado como filtro rápido e recorrer à PD só na faixa $V/2 \le A < V$.
 
-### 7.3 Dificuldades encontradas
+### 7.3 Comentários gerais (Força Bruta e Backtracking)
 
-- **Formular uma D&C que não fosse a força bruta.** A recursão "leva ou não leva o item $i$" divide o problema, mas gera $2^n$ chamadas e coincide com a força bruta. A solução foi dividir o *conjunto de itens* e combinar os perfis $f_X(c)$ por convolução $(\max,+)$, o que exigiu provar que a combinação é correta (Seção 4.2).
+1. A **força bruta é a referência**, não uma candidata. Ela é a tradução direta da definição do problema, é a única estratégia cujo custo é previsível sem olhar a instância, e serve para tornar $2^n$ um número concreto: 1 segundo com $n = 24$, mais de 4 anos com $n = 50$ (Seção 5.8). Ela perde até para a D&C a partir de $n \approx 18$.
+2. O **backtracking percorre a mesma árvore** e, nas instâncias aleatórias, visita um número de nós que cresce aproximadamente linear em $n$ — 126 nós com $n = 40$. Mas a complexidade de pior caso continua $O(n2^n)$, e a instância `data/backtracking_ruim.txt` mostra que o pior caso não é hipotético: com $n = 24$, 6,4 milhões de nós. Poda é uma aposta sobre a instância, não uma melhora de classe.
+3. **A boa poda veio da teoria das outras estratégias.** O limite superior é o ótimo da mochila fracionária, o mesmo objeto usado na prova da 2-aproximação (Seção 4.5), e a ordem de exploração é a ordem gulosa da Seção 4.4. O algoritmo exponencial mais eficiente do trabalho foi construído com as ferramentas das estratégias aproximadas.
+4. **Onde elas se aplicam.** Nenhuma das duas compete com a PD quando $C$ é moderado. O espaço delas é o oposto do da PD: $n$ pequeno e $C$ enorme (ou pesos não inteiros), caso em que a PD é inviável e uma resposta exata ainda é exigida.
+
+### 7.4 Dificuldades encontradas
+
+- **Formular uma D&C que não fosse a força bruta.** A recursão "leva ou não leva o item $i$" divide o problema, mas gera $2^n$ chamadas e coincide com a força bruta (Seção 4.6). A solução foi dividir o *conjunto de itens* e combinar os perfis $f_X(c)$ por convolução $(\max,+)$, o que exigiu provar que a combinação é correta (Seção 4.2).
 - **Manter a restrição "0-1" na PD com vetor único.** Percorrer $c$ em ordem crescente reaproveita o item na mesma iteração e resolve, sem querer, a mochila *ilimitada*. A ordem decrescente corrige isso.
 - **Medir tempos muito pequenos.** As execuções da PD duram frações de milissegundo e oscilam entre execuções. A solução foi usar `steady_clock`, reportar a mediana de 5 repetições e manter a contagem de operações como métrica independente da máquina.
 - **Adaptação ao C++.** O grupo escolheu C++ para aprender uma linguagem nova, e alguns detalhes da linguagem exigiram cuidado. O primeiro foram os tipos sem sinal em laços decrescentes: com `std::size_t`, o laço `for (c = C; c >= p; --c)` nunca termina quando $p = 0$, e isso foi resolvido com o idioma `c-- > p`. Também foi preciso evitar estouro de inteiros (os valores usam `int64_t`) e organizar um cabeçalho comum para integrar as estratégias.
 - **Ordenar por densidade sem quebrar a ordenação.** Comparar $v_i/p_i$ em ponto flutuante introduz erros de arredondamento, e o produto cruzado resolve isso. Porém, um item com $p_i = v_i = 0$ fica "empatado" com todos os outros pelo produto cruzado, e a comparação deixa de ser uma ordem fraca estrita, o que é comportamento indefinido em `std::sort`. A solução foi descartar os itens de valor 0 e tratar à parte os de peso 0 antes de ordenar.
 - **Integrar estratégias não exatas ao benchmark.** O benchmark exigia que todas as estratégias devolvessem o mesmo valor, o que uma heurística não cumpre. Foi preciso separar estratégias exatas de heurísticas e trocar a igualdade, para estas, por uma conferência de viabilidade e da garantia de aproximação.
-- **Interpretar a resposta das heurísticas na versão de decisão.** No início, o NÃO do guloso era impresso como resposta definitiva, o que está errado. A distinção entre SIM certificado, NÃO certificado pela garantia e "não sei" (Seção 4.6) foi a forma correta de ligar as heurísticas ao problema de decisão sorteado.
+- **Interpretar a resposta das heurísticas na versão de decisão.** No início, o NÃO do guloso era impresso como resposta definitiva, o que está errado. A distinção entre SIM certificado, NÃO certificado pela garantia e "não sei" (Seção 4.8) foi a forma correta de ligar as heurísticas ao problema de decisão sorteado.
+- **Fazer o limite superior do backtracking nunca subestimar.** O ótimo fracionário é racional e, com divisão inteira, seria truncado para baixo. Um limite abaixo do valor real poda o ramo que contém o ótimo, e o algoritmo passa a devolver respostas erradas, sem travar nem avisar. A correção foi arredondar a fração para cima, em aritmética de 128 bits para não estourar.
+- **Encontrar uma instância que derrote o backtracking.** As instâncias aleatórias e as correlacionadas do experimento C são fáceis para a poda: com $C = 1000$ e pesos até 1000, poucos itens cabem, a árvore útil é rasa e o limite fracionário é apertado. Foi preciso construir uma instância no estilo soma de subconjuntos — $v_i = p_i$, todos os pesos pares e pequenos em relação a $C$, e $C$ igual à metade do peso total mais 1, logo ímpar e inatingível por qualquer subconjunto — para a árvore explodir (`data/backtracking_ruim.txt`).
+- **Impedir que uma estratégia exponencial trave o benchmark.** Registrar a força bruta junto das demais faria o benchmark, que vai até $n = 1024$, nunca terminar. A solução foi declarar no registro de cada estratégia se ela é exponencial e qual o seu teto de $n$: as exponenciais saem do benchmark principal, ganham um experimento próprio com $n$ pequeno, e acima do teto são puladas com aviso.
 - **Escolher instâncias que diferenciam as heurísticas.** Nas instâncias aleatórias dos experimentos A e B, o guloso acertou o ótimo em quase todos os casos, e o experimento não mostrava diferença entre as duas heurísticas. Foi preciso um experimento de qualidade com muitas instâncias, $n$ pequeno e uma família correlacionada para observar o comportamento previsto pela teoria.
 
 ---

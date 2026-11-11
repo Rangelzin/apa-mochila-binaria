@@ -4,7 +4,7 @@ CXXFLAGS ?= -std=c++17 -O2 -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wsign
 CPPFLAGS += -Iinclude
 PYTHON   ?= python3
 
-NUCLEO = src/mochila.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp src/guloso.cpp src/aproximado.cpp
+NUCLEO = src/mochila.cpp src/forca_bruta.cpp src/backtracking.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp src/guloso.cpp src/aproximado.cpp
 HEADER = include/mochila.hpp
 
 all: build/mochila
@@ -18,7 +18,8 @@ run: build/mochila
 benchmark: build/mochila
 	./build/mochila --benchmark results/resultados.csv
 	./build/mochila --qualidade results/qualidade.csv
-	$(PYTHON) scripts/graficos.py results/resultados.csv docs/img results/qualidade.csv
+	./build/mochila --exponencial results/exponencial.csv
+	$(PYTHON) scripts/graficos.py results/resultados.csv docs/img results/qualidade.csv results/exponencial.csv
 
 clean:
 	rm -f build/mochila build/*.exe

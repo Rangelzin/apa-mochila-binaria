@@ -9,8 +9,10 @@ apa-mochila/
 ├── include/
 │   └── mochila.hpp              # tipos e contratos comuns a todas as estratégias
 ├── src/
-│   ├── main.cpp                 # executa uma instância, o benchmark ou o experimento de qualidade
+│   ├── main.cpp                 # executa uma instância, o benchmark ou os experimentos
 │   ├── mochila.cpp              # leitura, gerador aleatório, verificador de certificado
+│   ├── forca_bruta.cpp          # enumeração dos 2^n subconjuntos, sem poda
+│   ├── backtracking.cpp         # mesma árvore, com poda por limite superior
 │   ├── divisao_conquista.cpp
 │   ├── programacao_dinamica.cpp
 │   ├── guloso.cpp               # heurística gulosa (densidade v/p)
@@ -18,13 +20,15 @@ apa-mochila/
 ├── data/
 │   ├── exemplo.txt              # instância de exemplo
 │   ├── guloso_ruim.txt          # pior caso do guloso (obtém 2, ótimo é 100)
-│   └── aproximado_justo.txt     # garantia de 1/2 é justa (obtém 52, ótimo é 100)
+│   ├── aproximado_justo.txt     # garantia de 1/2 é justa (obtém 52, ótimo é 100)
+│   └── backtracking_ruim.txt    # a poda falha: 6,4 M nós contra ~50 numa instância aleatória
 ├── scripts/
 │   └── graficos.py              # CSV -> gráficos
 ├── results/
 │   ├── resultados.csv           # saída do benchmark (tempo e operações)
 │   ├── resultados_heuristicas.csv  # tempos do guloso/aproximado (+ PD vetor) usados na seção 6.5
-│   └── qualidade.csv            # saída do experimento de qualidade das heurísticas
+│   ├── qualidade.csv            # saída do experimento de qualidade das heurísticas
+│   └── exponencial.csv          # saída do experimento com força bruta e backtracking (n pequeno)
 ├── docs/
 │   ├── Documentação-Trabalho_parcial.md  # documentação (vira o PDF de entrega)
 │   └── img/                     # gráficos usados no .md
@@ -44,17 +48,18 @@ Abra a pasta no VS Code e use `Ctrl+Shift+P` → **Tasks: Run Task**:
 |---|---|
 | `Compilar` (`Ctrl+Shift+B`) | gera `build/mochila.exe` |
 | `Rodar exemplo` | resolve `data/exemplo.txt` com todas as estratégias |
-| `Benchmark + gráficos` | gera `results/resultados.csv`, `results/qualidade.csv` e os PNGs em `docs/img/` (~20 s) |
+| `Benchmark + gráficos` | gera `results/resultados.csv`, `results/qualidade.csv`, `results/exponencial.csv` e os PNGs em `docs/img/` (~25 s) |
 
 ### Windows: PowerShell
 
 ```powershell
-g++ -std=c++17 -O2 -Wall -Wextra -Iinclude src/main.cpp src/mochila.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp src/guloso.cpp src/aproximado.cpp -o build/mochila.exe
+g++ -std=c++17 -O2 -Wall -Wextra -Iinclude src/main.cpp src/mochila.cpp src/forca_bruta.cpp src/backtracking.cpp src/divisao_conquista.cpp src/programacao_dinamica.cpp src/guloso.cpp src/aproximado.cpp -o build/mochila.exe
 .\build\mochila.exe data\exemplo.txt
 
 .\build\mochila.exe --benchmark results\resultados.csv
 .\build\mochila.exe --qualidade results\qualidade.csv
-python scripts\graficos.py results\resultados.csv docs\img results\qualidade.csv
+.\build\mochila.exe --exponencial results\exponencial.csv
+python scripts\graficos.py results\resultados.csv docs\img results\qualidade.csv results\exponencial.csv
 ```
 
 ### Linux / macOS / Git Bash
@@ -85,7 +90,8 @@ As heurísticas (guloso e aproximado) respondem `NAO SEI` quando não atingem o 
 2. Implemente-a em `src/xxx.cpp`, incrementando `resultado.operacoes` na operação barômetro.
 3. Registre-a em `estrategias()` no `src/main.cpp`, dizendo se é exata. As exatas precisam bater com o ótimo da PD. As heurísticas são conferidas quanto à viabilidade e à garantia de aproximação declarada (campo `garantia`) e entram também no experimento `--qualidade`.
 4. Acrescente o arquivo às listas `NUCLEO` (Makefile) e `args` (`.vscode/tasks.json`).
-As estratégias exponenciais (força bruta e backtracking) não vão aguentar o benchmark atual (n até 1024). Para elas, convém um experimento separado, com n pequeno.
+
+Se a estratégia for exponencial, marque `exponencial = true` e preencha `maxN` no registro. Com isso ela fica fora do benchmark principal (que vai até $n = 1024$) e entra no experimento `--exponencial`, com $n$ pequeno; acima de `maxN` ela é pulada, com aviso, em vez de travar a execução.
 
 ## Gerar o PDF
 

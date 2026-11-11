@@ -1,12 +1,13 @@
 /**
  * @file main.cpp
- * @brief Driver: resolve uma instância de arquivo, roda o benchmark (tempo + operações)
- *        ou o experimento de qualidade das heurísticas.
+ * @brief Driver: resolve uma instância de arquivo, roda o benchmark (tempo + operações),
+ *        o experimento de qualidade das heurísticas ou o das estratégias exponenciais.
  *
  * Uso:
  *   ./build/mochila data/exemplo.txt                      resolve e imprime resultado de cada estratégia
  *   ./build/mochila --benchmark results/resultados.csv    executa os experimentos de tempo e grava CSV
  *   ./build/mochila --qualidade results/qualidade.csv     mede valor heurístico / ótimo e grava CSV
+ *   ./build/mochila --exponencial results/exponencial.csv mede força bruta e backtracking em n pequeno
  */
 #include <algorithm>
 #include <chrono>
@@ -33,11 +34,33 @@ struct Estrategia {
     std::function<Contador(int n, int capacidade)> operacoesTeoricas;  // 0 = depende dos dados
     bool exata;              // true: sempre devolve o ótimo
     double garantia = 0.0;   // heurísticas: razão mínima garantida com o ótimo (0 = nenhuma)
+    bool exponencial = false;  // true: custo 2^n, só entra no experimento --exponencial
+    std::size_t maxN = 0;      // 0 = sem limite; acima disso a estratégia é pulada
 };
+
+/**
+ * @brief Tetos de n das estratégias exponenciais.
+ * A força bruta percorre 2^n sempre, então o teto é o do tempo de execução. O backtracking
+ * poda e na prática vai muito além, mas a poda não dá garantia: o teto é precaução contra o
+ * pior caso, não uma propriedade do algoritmo.
+ */
+constexpr std::size_t kMaxForcaBruta = 24;
+constexpr std::size_t kMaxBacktracking = 40;
+
+/** @brief A estratégia pode ser executada com esse n? */
+bool viavel(const Estrategia& e, std::size_t n) { return e.maxN == 0 || n <= e.maxN; }
 
 std::vector<Estrategia> estrategias() {
     const auto dependeDosDados = [](int, int) -> Contador { return 0; };
     return {
+        {"forca_bruta", mochila::resolverForcaBruta,
+         [](int n, int) -> Contador {
+             if (n < 0 || static_cast<std::size_t>(n) > kMaxForcaBruta) return 0;  // 2^n não cabe
+             return static_cast<Contador>(n) * (Contador{1} << n);
+         },
+         true, 0.0, true, kMaxForcaBruta},
+        {"backtracking", mochila::resolverBacktracking, dependeDosDados, true, 0.0, true,
+         kMaxBacktracking},
         {"divisao_conquista", mochila::resolverDivisaoConquista,
          [](int n, int c) -> Contador {
              if (n == 0) return 0;
@@ -135,6 +158,10 @@ int resolverArquivo(const std::string& caminho) {
     std::cout << "n = " << instancia.itens.size() << ", C = " << instancia.capacidade
               << ", V = " << instancia.alvo << "\n";
     for (const Estrategia& e : estrategias()) {
+        if (!viavel(e, instancia.itens.size())) {
+            std::cout << e.nome << ": pulado (n > " << e.maxN << ", 2^n inviavel)\n";
+            continue;
+        }
         imprimirResultado(e, e.resolver(instancia), instancia);
     }
     return 0;
@@ -153,20 +180,31 @@ std::vector<Ponto> pontosDoExperimento() {
     return pontos;
 }
 
-int rodarBenchmark(const std::string& caminhoCsv) {
-    constexpr int kRepeticoes = 5;
-    constexpr unsigned kSemente = 42;
-    std::ofstream csv(caminhoCsv);
-    if (!csv) throw std::runtime_error("não foi possível criar " + caminhoCsv);
-    csv << "experimento,estrategia,n,C,tempo_ms,operacoes,operacoes_teoricas,melhor_valor,razao_otimo\n";
+/** @brief Pontos do experimento D: n pequeno, a faixa em que 2^n ainda é viável. */
+std::vector<Ponto> pontosExponenciais() {
+    std::vector<Ponto> pontos;
+    for (int n : {4, 8, 12, 16, 20, 22, 24, 28, 32, 36, 40}) {
+        pontos.push_back({"exponencial", n, 1000});
+    }
+    return pontos;
+}
 
-    for (const Ponto& p : pontosDoExperimento()) {
+/**
+ * @brief Mede cada estratégia em cada ponto, confere o resultado contra o ótimo e grava uma
+ * linha de CSV por medição. As exponenciais só entram quando `incluirExponenciais`.
+ */
+void medirPontos(const std::vector<Ponto>& pontos, std::ostream& csv, int repeticoes,
+                 bool incluirExponenciais) {
+    constexpr unsigned kSemente = 42;
+    for (const Ponto& p : pontos) {
         const Instancia instancia = mochila::gerarInstancia(p.n, p.capacidade, kSemente);
         const std::string contexto = p.experimento + " n=" + std::to_string(p.n) + " C=" + std::to_string(p.capacidade);
         const Valor otimo = mochila::resolverProgramacaoDinamicaVetor(instancia).melhorValor;
         for (const Estrategia& e : estrategias()) {
+            if (e.exponencial && !incluirExponenciais) continue;  // 2^n: ver --exponencial
+            if (!viavel(e, instancia.itens.size())) continue;
             Resultado r;
-            const double ms = medirMedianaMs(e, instancia, kRepeticoes, r);
+            const double ms = medirMedianaMs(e, instancia, repeticoes, r);
             if (e.exata && r.melhorValor != otimo) {
                 throw std::logic_error("estratégias exatas divergiram em " + contexto);
             }
@@ -178,6 +216,29 @@ int rodarBenchmark(const std::string& caminhoCsv) {
             std::cout << contexto << ' ' << e.nome << ": " << ms << " ms, " << r.operacoes << " ops\n";
         }
     }
+}
+
+/** @brief Abre o CSV de saída já com o cabeçalho das medições de tempo. */
+std::ofstream abrirCsvDeTempo(const std::string& caminho) {
+    std::ofstream csv(caminho);
+    if (!csv) throw std::runtime_error("não foi possível criar " + caminho);
+    csv << "experimento,estrategia,n,C,tempo_ms,operacoes,operacoes_teoricas,melhor_valor,razao_otimo\n";
+    return csv;
+}
+
+int rodarBenchmark(const std::string& caminhoCsv) {
+    std::ofstream csv = abrirCsvDeTempo(caminhoCsv);
+    medirPontos(pontosDoExperimento(), csv, 5, false);
+    return 0;
+}
+
+/**
+ * @brief Experimento D: compara as estratégias exponenciais com as demais na faixa de n em
+ * que a enumeração completa ainda termina. Menos repetições, porque cada execução é cara.
+ */
+int rodarExponencial(const std::string& caminhoCsv) {
+    std::ofstream csv = abrirCsvDeTempo(caminhoCsv);
+    medirPontos(pontosExponenciais(), csv, 3, true);
     return 0;
 }
 
@@ -263,9 +324,11 @@ int main(int argc, char* argv[]) {
     try {
         if (argc == 3 && std::string(argv[1]) == "--benchmark") return rodarBenchmark(argv[2]);
         if (argc == 3 && std::string(argv[1]) == "--qualidade") return rodarQualidade(argv[2]);
+        if (argc == 3 && std::string(argv[1]) == "--exponencial") return rodarExponencial(argv[2]);
         if (argc == 2) return resolverArquivo(argv[1]);
         std::cerr << "uso: " << argv[0]
-                  << " <instancia.txt> | --benchmark <saida.csv> | --qualidade <saida.csv>\n";
+                  << " <instancia.txt> | --benchmark <saida.csv> | --qualidade <saida.csv>"
+                     " | --exponencial <saida.csv>\n";
         return 2;
     } catch (const std::exception& erro) {
         std::cerr << "erro: " << erro.what() << '\n';
