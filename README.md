@@ -30,7 +30,7 @@ apa-mochila/
 │   ├── qualidade.csv            # saída do experimento de qualidade das heurísticas
 │   └── exponencial.csv          # saída do experimento com força bruta e backtracking (n pequeno)
 ├── docs/
-│   ├── Documentação-Trabalho_parcial.md  # documentação (vira o PDF de entrega)
+│   ├── Documentação-Trabalho.md  # documentação (vira o PDF de entrega)
 │   └── img/                     # gráficos usados no .md
 ├── build/                       # executáveis (ignorado pelo git)
 └── Makefile
